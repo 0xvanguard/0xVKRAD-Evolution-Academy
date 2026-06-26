@@ -1,0 +1,81 @@
+version: '3.8'
+
+# ============================================================
+#  0xVKRAD Lab — 0xVK-001: Operación Rompe-Muros
+#  Entorno vulnerable para práctica de SQL Injection
+#  USO EXCLUSIVO EDUCATIVO — No exponer en producción
+# ============================================================
+
+services:
+
+  # ── Aplicación web vulnerable ──────────────────────────────
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: 0xvk001_app
+    restart: unless-stopped
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=corp_db
+      - DB_USER=webapp
+      - DB_PASS=webapp2024
+      - SECRET_KEY=0xVKRAD_lab_insecure_key
+      - FLASK_ENV=development
+      - FLASK_DEBUG=0
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - lab_net
+    ports:
+      - "5000:5000"
+
+  # ── Proxy Nginx ─────────────────────────────────────────────
+  proxy:
+    image: nginx:1.25-alpine
+    container_name: 0xvk001_proxy
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - app
+    networks:
+      - lab_net
+
+  # ── Base de datos MySQL vulnerable ──────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: 0xvk001_db
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=r00tpassword
+      - MYSQL_DATABASE=corp_db
+      - MYSQL_USER=webapp
+      - MYSQL_PASSWORD=webapp2024
+    volumes:
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+      - db_data:/var/lib/mysql
+    networks:
+      - lab_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "webapp", "-pwebapp2024"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "3306:3306"
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  lab_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
